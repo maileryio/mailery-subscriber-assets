@@ -1,10 +1,13 @@
-import commonjs from 'rollup-plugin-commonjs';
+import buble from '@rollup/plugin-buble';
+import commonjs from '@rollup/plugin-commonjs';
+import replace from '@rollup/plugin-replace';
+import json from '@rollup/plugin-json';
 import vue from 'rollup-plugin-vue';
-import buble from 'rollup-plugin-buble';
-import replace from 'rollup-plugin-replace';
 import resolve from 'rollup-plugin-node-resolve';
 import { eslint } from 'rollup-plugin-eslint';
 import sassPostcss from 'rollup-plugin-sass-postcss';
+import globals from 'rollup-plugin-node-globals';
+import builtins from 'rollup-plugin-node-builtins';
 import autoprefixer from 'autoprefixer';
 
 const env = process.env.NODE_ENV || 'development';
@@ -13,7 +16,7 @@ const isProd = env === 'production';
 export default (async () => ({
   input: 'src/index.js',
   output: {
-    name: '_____',
+    name: 'mailery.subscriber',
     exports: 'named',
     sourcemap: true,
     globals: {
@@ -28,9 +31,15 @@ export default (async () => ({
     'vuex'
   ],
   plugins: [
-    eslint(),
+    resolve({
+      browser: true,
+      preferBuiltins: true
+    }),
     commonjs(),
-    resolve(),
+    globals(),
+    builtins(),
+    json(),
+    eslint(),
     replace({
       'process.env.NODE_ENV': JSON.stringify(env)
     }),
