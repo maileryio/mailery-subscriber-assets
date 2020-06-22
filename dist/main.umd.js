@@ -27885,11 +27885,25 @@
 	var script = {
 	  name: 'ui-csv-import',
 	  props: {
-	    url: {
+	    name: {
+	      type: String,
+	      required: true
+	    },
+	    error: {
 	      type: String
 	    },
 	    mapFields: {
 	      required: true
+	    },
+	    mapFieldsName: {
+	      type: String,
+	      default: 'fields'
+	    },
+	    fileMimeTypes: {
+	      type: Array,
+	      default: function () {
+	        return ['text/csv', 'text/x-csv', 'application/vnd.ms-excel', 'text/plain'];
+	      }
 	    }
 	  },
 	  data: function data () {
@@ -27897,23 +27911,93 @@
 	      inputMapFields: JSON.parse(this.mapFields),
 	      isDragover: false,
 	      droppedFiles: null,
+	      fileName: null,
+	      fileSelected: false,
+	      isValidFileMimeType: false,
+	      fieldsToMap: [],
+	      sample: null,
+	      map: {},
+	      errorMessage: this.error
+	    }
+	  },
+	  created: function created() {
+	    var mapFields = JSON.parse(this.mapFields);
+
+	    if (lodash.isArray(mapFields)) {
+	      this.fieldsToMap = lodash.map(mapFields, function (item) { return ({
+	        key: item,
+	        label: item
+	      }); });
+	    } else {
+	      this.fieldsToMap = lodash.map(mapFields, function (label, key) { return ({
+	        key: key,
+	        label: label
+	      }); });
 	    }
 	  },
 	  methods: {
-	    dragover: function dragover () {
+	    handleDragover: function handleDragover () {
 	      this.isDragover = true;
 	    },
-	    dragleave: function dragleave () {
+	    handleDragleave: function handleDragleave () {
 	      this.isDragover = false;
 	    },
-	    drop: function drop (e) {
+	    handleDrop: function handleDrop (e) {
+	      var this$1 = this;
+
 	      this.isDragover = false;
+	      this.droppedFiles = e.dataTransfer.files;
+
+	      this.$nextTick(function () {
+	        var event = new Event('change');
+	        Object.defineProperty(event, 'target', { writable: false, value: { files: this$1.droppedFiles } });
+
+	        this$1.$refs.file.dispatchEvent(event);
+	      });
 	    },
-	    handleCallback: function handleCallback (response) {
-	      console.log(response);
+	    handleChange: function handleChange (e) {
+	      var file = e.target.files[0];
+
+	      if (file) {
+	        var mimeType = file.type === '' ? mimeTypes.lookup(file.name) : file.type;
+
+	        this.fileSelected = true;
+	        this.isValidFileMimeType = this.validateMimeType(mimeType);
+	      } else {
+	        this.isValidFileMimeType = false;
+	        this.fileSelected = false;
+	      }
+
+	      if (this.isValidFileMimeType) {
+	        this.loadSampleData(file);
+	        this.errorMessage = null;
+	        this.fileName = file.name;
+	      } else {
+	        this.sample = null;
+	        this.fileName = null;
+	        this.errorMessage = 'File type is invalid.';
+	      }
 	    },
-	    handleCatch: function handleCatch (response) {
-	      console.log(response);
+	    validateMimeType: function validateMimeType(type) {
+	      return this.fileMimeTypes.indexOf(type) > -1;
+	    },
+	    loadSampleData: function loadSampleData (file) {
+	      var this$1 = this;
+
+	      this.readFile(file, function (output) {
+	        this$1.sample = lodash.get(papaparse_min.parse(output, { preview: 2, skipEmptyLines: true }), 'data');
+	      });
+	    },
+	    readFile: function readFile (file, callback) {
+	      var reader = new FileReader();
+	      reader.readAsText(file, 'UTF-8');
+	      reader.onload = function (e) { return callback(e.target.result); };
+	      reader.onerror = function () {};
+	    }
+	  },
+	  computed: {
+	    firstRow: function firstRow () {
+	      return lodash.get(this, 'sample.0');
 	    }
 	  }
 	};
@@ -28063,28 +28147,28 @@
 	          on: {
 	            dragover: function($event) {
 	              $event.preventDefault();
-	              return _vm.dragover($event)
+	              return _vm.handleDragover($event)
 	            },
 	            dragenter: function($event) {
 	              $event.preventDefault();
-	              return _vm.dragover($event)
+	              return _vm.handleDragover($event)
 	            },
 	            dragleave: function($event) {
 	              $event.preventDefault();
-	              return _vm.dragleave($event)
+	              return _vm.handleDragleave($event)
 	            },
 	            dragend: function($event) {
 	              $event.preventDefault();
-	              return _vm.dragleave($event)
+	              return _vm.handleDragleave($event)
 	            },
 	            drop: function($event) {
 	              $event.preventDefault();
-	              return _vm.drop($event)
+	              return _vm.handleDrop($event)
 	            }
 	          }
 	        },
 	        [
-	          _c("label", { attrs: { for: "file" } }, [
+	          _c("label", [
 	            _c(
 	              "svg",
 	              {
@@ -28109,23 +28193,27 @@
 	            _c("input", {
 	              ref: "file",
 	              staticClass: "form-control-file file-upload--input",
-	              attrs: { id: "file", type: "file", files: _vm.droppedFiles },
+	              attrs: { type: "file", files: _vm.droppedFiles, name: _vm.name },
 	              on: {
 	                change: function($event) {
 	                  $event.preventDefault();
-	                  return _vm.change($event)
+	                  return _vm.handleChange($event)
 	                }
 	              }
 	            }),
 	            _vm._v(" "),
-	            _c("span", { staticClass: "file-upload--dragndrop text-muted" }, [
-	              _vm._v("Drag and drop a file here or click")
-	            ])
+	            _vm.fileName
+	              ? _c("span", { staticClass: "text-muted" }, [
+	                  _vm._v(_vm._s(_vm.fileName))
+	                ])
+	              : _c("span", { staticClass: "text-muted" }, [
+	                  _vm._v("Drag and drop a file here or click")
+	                ])
 	          ]),
 	          _vm._v(" "),
-	          _vm.showErrorMessage
+	          _vm.errorMessage
 	            ? _c("div", { staticClass: "error mt-2 text-danger" }, [
-	                _vm._v("\n        File type is invalid\n      ")
+	                _vm._v("\n        " + _vm._s(_vm.errorMessage) + "\n      ")
 	              ])
 	            : _vm._e()
 	        ]
@@ -28134,7 +28222,7 @@
 	    _vm._v(" "),
 	    _vm.sample
 	      ? _c("div", { staticClass: "form-group" }, [
-	          _c("table", { class: _vm.tableClass }, [
+	          _c("table", { staticClass: "table" }, [
 	            _vm._m(0),
 	            _vm._v(" "),
 	            _c(
@@ -28155,8 +28243,8 @@
 	                            expression: "map[field.key]"
 	                          }
 	                        ],
-	                        class: _vm.tableSelectClass,
-	                        attrs: { name: "csv_uploader_map_" + key },
+	                        staticClass: "form-control",
+	                        attrs: { name: _vm.mapFieldsName + "[" + key + "]" },
 	                        on: {
 	                          change: function($event) {
 	                            var $$selectedVal = Array.prototype.filter
@@ -28178,11 +28266,7 @@
 	                        }
 	                      },
 	                      [
-	                        _vm.canIgnore
-	                          ? _c("option", { domProps: { value: null } }, [
-	                              _vm._v("Ignore")
-	                            ])
-	                          : _vm._e(),
+	                        _c("option", { domProps: { value: null } }),
 	                        _vm._v(" "),
 	                        _vm._l(_vm.firstRow, function(column, key) {
 	                          return _c(
@@ -28199,23 +28283,7 @@
 	              }),
 	              0
 	            )
-	          ]),
-	          _vm._v(" "),
-	          _vm.url
-	            ? _c("div", { staticClass: "form-group" }, [
-	                _c("input", {
-	                  class: _vm.buttonClass,
-	                  attrs: { type: "submit" },
-	                  domProps: { value: _vm.submitBtnText },
-	                  on: {
-	                    click: function($event) {
-	                      $event.preventDefault();
-	                      return _vm.submit($event)
-	                    }
-	                  }
-	                })
-	              ])
-	            : _vm._e()
+	          ])
 	        ])
 	      : _vm._e()
 	  ])
@@ -28239,7 +28307,7 @@
 	  /* style */
 	  var __vue_inject_styles__ = function (inject) {
 	    if (!inject) { return }
-	    inject("data-v-7c3280d5_0", { source: ".file-upload {\n  outline: 2px dashed #dee2e6;\n  outline-offset: -5px;\n  position: relative;\n  padding: 70px 20px;\n  text-align: center;\n  transition: outline-offset 0.15s ease-in-out, background-color 0.15s linear;\n}\n.file-upload label {\n  max-width: 80%;\n  text-overflow: ellipsis;\n  white-space: nowrap;\n  cursor: pointer;\n  display: inline-block;\n  overflow: hidden;\n}\n.file-upload .file-upload--icon {\n  width: 100%;\n  height: 80px;\n  fill: #dee2e6;\n  display: block;\n  margin-bottom: 40px;\n}\n.file-upload .file-upload--input {\n  width: 0.1px;\n  height: 0.1px;\n  opacity: 0;\n  overflow: hidden;\n  position: absolute;\n  z-index: -1;\n}\n.is-dragover .file-upload {\n  outline-offset: -10px;\n  outline-color: #c8dadf;\n  background-color: #fff;\n}\n\n/*# sourceMappingURL=CsvImport.vue.map */", map: {"version":3,"sources":["/home/filsh/www/mailery/node_modules/@maileryio/mailery-subscriber-assets/src/components/CsvImport.vue","CsvImport.vue"],"names":[],"mappings":"AAiGA;EACA,2BAAA;EACA,oBAAA;EACA,kBAAA;EACA,kBAAA;EACA,kBAAA;EACA,2EAAA;AChGA;ADkGA;EACA,cAAA;EACA,uBAAA;EACA,mBAAA;EACA,eAAA;EACA,qBAAA;EACA,gBAAA;AChGA;ADmGA;EACA,WAAA;EACA,YAAA;EACA,aAAA;EACA,cAAA;EACA,mBAAA;ACjGA;ADoGA;EACA,YAAA;EACA,aAAA;EACA,UAAA;EACA,gBAAA;EACA,kBAAA;EACA,WAAA;AClGA;ADuGA;EACA,qBAAA;EACA,sBAAA;EACA,sBAAA;ACpGA;;AAEA,wCAAwC","file":"CsvImport.vue","sourcesContent":["<template>\n  <div :class=\"{ 'is-dragover': isDragover }\">\n    <div class=\"form-group\">\n      <div\n        class=\"file-upload bg-light\"\n        @dragover.prevent=\"dragover\"\n        @dragenter.prevent=\"dragover\"\n        @dragleave.prevent=\"dragleave\"\n        @dragend.prevent=\"dragleave\"\n        @drop.prevent=\"drop\"\n      >\n        <label for=\"file\">\n          <svg class=\"file-upload--icon\" xmlns=\"http://www.w3.org/2000/svg\" width=\"50\" height=\"43\" viewBox=\"0 0 50 43\">\n            <path d=\"M48.4 26.5c-.9 0-1.7.7-1.7 1.7v11.6h-43.3v-11.6c0-.9-.7-1.7-1.7-1.7s-1.7.7-1.7 1.7v13.2c0 .9.7 1.7 1.7 1.7h46.7c.9 0 1.7-.7 1.7-1.7v-13.2c0-1-.7-1.7-1.7-1.7zm-24.5 6.1c.3.3.8.5 1.2.5.4 0 .9-.2 1.2-.5l10-11.6c.7-.7.7-1.7 0-2.4s-1.7-.7-2.4 0l-7.1 8.3v-25.3c0-.9-.7-1.7-1.7-1.7s-1.7.7-1.7 1.7v25.3l-7.1-8.3c-.7-.7-1.7-.7-2.4 0s-.7 1.7 0 2.4l10 11.6z\"></path>\n          </svg>\n          <input ref=\"file\" id=\"file\" type=\"file\" @change.prevent=\"change\" class=\"form-control-file file-upload--input\" :files=\"droppedFiles\">\n          <span class=\"file-upload--dragndrop text-muted\">Drag and drop a file here or click</span>\n        </label>\n\n        <div class=\"error mt-2 text-danger\" v-if=\"showErrorMessage\">\n          File type is invalid\n        </div>\n      </div>\n    </div>\n\n    <div class=\"form-group\" v-if=\"sample\">\n      <table :class=\"tableClass\">\n        <thead>\n          <tr>\n            <th>Field</th>\n            <th>CSV Column</th>\n          </tr>\n        </thead>\n        <tbody>\n        <tr v-for=\"(field, key) in fieldsToMap\" :key=\"key\">\n          <td>{{ field.label }}</td>\n          <td>\n            <select :class=\"tableSelectClass\" :name=\"`csv_uploader_map_${key}`\" v-model=\"map[field.key]\">\n              <option :value=\"null\" v-if=\"canIgnore\">Ignore</option>\n              <option v-for=\"(column, key) in firstRow\" :key=\"key\" :value=\"key\">{{ column }}</option>\n            </select>\n          </td>\n        </tr>\n        </tbody>\n      </table>\n\n      <div class=\"form-group\" v-if=\"url\">\n        <input type=\"submit\" :class=\"buttonClass\" @click.prevent=\"submit\" :value=\"submitBtnText\">\n      </div>\n    </div>\n  </div>\n</template>\n\n<script>\n  import Vue from 'vue';\n  import { drop, every, forEach, get, isArray, map, set } from 'lodash';\n  import Papa from 'papaparse';\n  import mimeTypes from 'mime-types';\n\n  export default {\n    name: 'ui-csv-import',\n    props: {\n      url: {\n        type: String\n      },\n      mapFields: {\n        required: true\n      }\n    },\n    data () {\n      return {\n        inputMapFields: JSON.parse(this.mapFields),\n        isDragover: false,\n        droppedFiles: null,\n      }\n    },\n    methods: {\n      dragover () {\n        this.isDragover = true;\n      },\n      dragleave () {\n        this.isDragover = false;\n      },\n      drop (e) {\n        this.isDragover = false;\n      },\n      handleCallback (response) {\n        console.log(response);\n      },\n      handleCatch (response) {\n        console.log(response);\n      }\n    }\n  }\n</script>\n\n<style lang=\"scss\">\n.file-upload {\n  outline: 2px dashed #dee2e6;\n  outline-offset: -5px;\n  position: relative;\n  padding: 70px 20px;\n  text-align: center;\n  transition: outline-offset .15s ease-in-out, background-color .15s linear;\n\n  label {\n    max-width: 80%;\n    text-overflow: ellipsis;\n    white-space: nowrap;\n    cursor: pointer;\n    display: inline-block;\n    overflow: hidden;\n  }\n\n  .file-upload--icon {\n    width: 100%;\n    height: 80px;\n    fill: #dee2e6;\n    display: block;\n    margin-bottom: 40px;\n  }\n\n  .file-upload--input {\n    width: 0.1px;\n    height: 0.1px;\n    opacity: 0;\n    overflow: hidden;\n    position: absolute;\n    z-index: -1;\n  }\n}\n\n.is-dragover {\n  .file-upload {\n    outline-offset: -10px;\n    outline-color: #c8dadf;\n    background-color: #fff;\n  }\n}\n</style>\n",".file-upload {\n  outline: 2px dashed #dee2e6;\n  outline-offset: -5px;\n  position: relative;\n  padding: 70px 20px;\n  text-align: center;\n  transition: outline-offset 0.15s ease-in-out, background-color 0.15s linear;\n}\n.file-upload label {\n  max-width: 80%;\n  text-overflow: ellipsis;\n  white-space: nowrap;\n  cursor: pointer;\n  display: inline-block;\n  overflow: hidden;\n}\n.file-upload .file-upload--icon {\n  width: 100%;\n  height: 80px;\n  fill: #dee2e6;\n  display: block;\n  margin-bottom: 40px;\n}\n.file-upload .file-upload--input {\n  width: 0.1px;\n  height: 0.1px;\n  opacity: 0;\n  overflow: hidden;\n  position: absolute;\n  z-index: -1;\n}\n\n.is-dragover .file-upload {\n  outline-offset: -10px;\n  outline-color: #c8dadf;\n  background-color: #fff;\n}\n\n/*# sourceMappingURL=CsvImport.vue.map */"]}, media: undefined });
+	    inject("data-v-5a85a582_0", { source: ".file-upload {\n  outline: 2px dashed #dee2e6;\n  outline-offset: -5px;\n  position: relative;\n  padding: 70px 20px;\n  text-align: center;\n  transition: outline-offset 0.15s ease-in-out, background-color 0.15s linear;\n}\n.file-upload label {\n  max-width: 80%;\n  text-overflow: ellipsis;\n  white-space: nowrap;\n  cursor: pointer;\n  display: inline-block;\n  overflow: hidden;\n}\n.file-upload .file-upload--icon {\n  width: 100%;\n  height: 80px;\n  fill: #dee2e6;\n  display: block;\n  margin-bottom: 40px;\n}\n.file-upload .file-upload--input {\n  width: 0.1px;\n  height: 0.1px;\n  opacity: 0;\n  overflow: hidden;\n  position: absolute;\n  z-index: -1;\n}\n.is-dragover .file-upload {\n  outline-offset: -10px;\n  outline-color: #c8dadf;\n  background-color: #fff;\n}\n\n/*# sourceMappingURL=CsvImport.vue.map */", map: {"version":3,"sources":["/home/filsh/www/mailery/node_modules/@maileryio/mailery-subscriber-assets/src/components/CsvImport.vue","CsvImport.vue"],"names":[],"mappings":"AA8KA;EACA,2BAAA;EACA,oBAAA;EACA,kBAAA;EACA,kBAAA;EACA,kBAAA;EACA,2EAAA;AC7KA;AD+KA;EACA,cAAA;EACA,uBAAA;EACA,mBAAA;EACA,eAAA;EACA,qBAAA;EACA,gBAAA;AC7KA;ADgLA;EACA,WAAA;EACA,YAAA;EACA,aAAA;EACA,cAAA;EACA,mBAAA;AC9KA;ADiLA;EACA,YAAA;EACA,aAAA;EACA,UAAA;EACA,gBAAA;EACA,kBAAA;EACA,WAAA;AC/KA;ADoLA;EACA,qBAAA;EACA,sBAAA;EACA,sBAAA;ACjLA;;AAEA,wCAAwC","file":"CsvImport.vue","sourcesContent":["<template>\n  <div :class=\"{ 'is-dragover': isDragover }\">\n    <div class=\"form-group\">\n      <div\n        class=\"file-upload bg-light\"\n        @dragover.prevent=\"handleDragover\"\n        @dragenter.prevent=\"handleDragover\"\n        @dragleave.prevent=\"handleDragleave\"\n        @dragend.prevent=\"handleDragleave\"\n        @drop.prevent=\"handleDrop\"\n      >\n        <label>\n          <svg class=\"file-upload--icon\" xmlns=\"http://www.w3.org/2000/svg\" width=\"50\" height=\"43\" viewBox=\"0 0 50 43\">\n            <path d=\"M48.4 26.5c-.9 0-1.7.7-1.7 1.7v11.6h-43.3v-11.6c0-.9-.7-1.7-1.7-1.7s-1.7.7-1.7 1.7v13.2c0 .9.7 1.7 1.7 1.7h46.7c.9 0 1.7-.7 1.7-1.7v-13.2c0-1-.7-1.7-1.7-1.7zm-24.5 6.1c.3.3.8.5 1.2.5.4 0 .9-.2 1.2-.5l10-11.6c.7-.7.7-1.7 0-2.4s-1.7-.7-2.4 0l-7.1 8.3v-25.3c0-.9-.7-1.7-1.7-1.7s-1.7.7-1.7 1.7v25.3l-7.1-8.3c-.7-.7-1.7-.7-2.4 0s-.7 1.7 0 2.4l10 11.6z\"></path>\n          </svg>\n          <input ref=\"file\" type=\"file\" @change.prevent=\"handleChange\" class=\"form-control-file file-upload--input\" :files=\"droppedFiles\" :name=\"name\">\n          <span class=\"text-muted\" v-if=\"fileName\">{{ fileName }}</span>\n          <span class=\"text-muted\" v-else>Drag and drop a file here or click</span>\n        </label>\n\n        <div class=\"error mt-2 text-danger\" v-if=\"errorMessage\">\n          {{ errorMessage }}\n        </div>\n      </div>\n    </div>\n\n    <div class=\"form-group\" v-if=\"sample\">\n      <table class=\"table\">\n        <thead>\n          <tr>\n            <th>Field</th>\n            <th>CSV Column</th>\n          </tr>\n        </thead>\n        <tbody>\n        <tr v-for=\"(field, key) in fieldsToMap\" :key=\"key\">\n          <td>{{ field.label }}</td>\n          <td>\n            <select class=\"form-control\" :name=\"`${mapFieldsName}[${key}]`\" v-model=\"map[field.key]\">\n              <option :value=\"null\"></option>\n              <option v-for=\"(column, key) in firstRow\" :key=\"key\" :value=\"key\">{{ column }}</option>\n            </select>\n          </td>\n        </tr>\n        </tbody>\n      </table>\n    </div>\n  </div>\n</template>\n\n<script>\n  import Vue from 'vue';\n  import { drop, every, forEach, get, isArray, map, set } from 'lodash';\n  import Papa from 'papaparse';\n  import mimeTypes from 'mime-types';\n\n  export default {\n    name: 'ui-csv-import',\n    props: {\n      name: {\n        type: String,\n        required: true\n      },\n      error: {\n        type: String\n      },\n      mapFields: {\n        required: true\n      },\n      mapFieldsName: {\n        type: String,\n        default: 'fields'\n      },\n      fileMimeTypes: {\n        type: Array,\n        default: () => {\n          return ['text/csv', 'text/x-csv', 'application/vnd.ms-excel', 'text/plain'];\n        }\n      }\n    },\n    data () {\n      return {\n        inputMapFields: JSON.parse(this.mapFields),\n        isDragover: false,\n        droppedFiles: null,\n        fileName: null,\n        fileSelected: false,\n        isValidFileMimeType: false,\n        fieldsToMap: [],\n        sample: null,\n        map: {},\n        errorMessage: this.error\n      }\n    },\n    created() {\n      const mapFields = JSON.parse(this.mapFields);\n\n      if (isArray(mapFields)) {\n        this.fieldsToMap = map(mapFields, (item) => ({\n          key: item,\n          label: item\n        }));\n      } else {\n        this.fieldsToMap = map(mapFields, (label, key) => ({\n          key: key,\n          label: label\n        }));\n      }\n    },\n    methods: {\n      handleDragover () {\n        this.isDragover = true;\n      },\n      handleDragleave () {\n        this.isDragover = false;\n      },\n      handleDrop (e) {\n        this.isDragover = false;\n        this.droppedFiles = e.dataTransfer.files;\n\n        this.$nextTick(() => {\n          const event = new Event('change');\n          Object.defineProperty(event, 'target', { writable: false, value: { files: this.droppedFiles } });\n\n          this.$refs.file.dispatchEvent(event);\n        })\n      },\n      handleChange (e) {\n        const file = e.target.files[0];\n\n        if (file) {\n          const mimeType = file.type === '' ? mimeTypes.lookup(file.name) : file.type;\n\n          this.fileSelected = true;\n          this.isValidFileMimeType = this.validateMimeType(mimeType);\n        } else {\n          this.isValidFileMimeType = false;\n          this.fileSelected = false;\n        }\n\n        if (this.isValidFileMimeType) {\n          this.loadSampleData(file);\n          this.errorMessage = null;\n          this.fileName = file.name;\n        } else {\n          this.sample = null;\n          this.fileName = null;\n          this.errorMessage = 'File type is invalid.';\n        }\n      },\n      validateMimeType(type) {\n        return this.fileMimeTypes.indexOf(type) > -1;\n      },\n      loadSampleData (file) {\n        this.readFile(file, (output) => {\n          this.sample = get(Papa.parse(output, { preview: 2, skipEmptyLines: true }), 'data');\n        });\n      },\n      readFile (file, callback) {\n        const reader = new FileReader();\n        reader.readAsText(file, 'UTF-8');\n        reader.onload = (e) => callback(e.target.result);\n        reader.onerror = () => {};\n      }\n    },\n    computed: {\n      firstRow () {\n        return get(this, 'sample.0');\n      }\n    }\n  }\n</script>\n\n<style lang=\"scss\">\n.file-upload {\n  outline: 2px dashed #dee2e6;\n  outline-offset: -5px;\n  position: relative;\n  padding: 70px 20px;\n  text-align: center;\n  transition: outline-offset .15s ease-in-out, background-color .15s linear;\n\n  label {\n    max-width: 80%;\n    text-overflow: ellipsis;\n    white-space: nowrap;\n    cursor: pointer;\n    display: inline-block;\n    overflow: hidden;\n  }\n\n  .file-upload--icon {\n    width: 100%;\n    height: 80px;\n    fill: #dee2e6;\n    display: block;\n    margin-bottom: 40px;\n  }\n\n  .file-upload--input {\n    width: 0.1px;\n    height: 0.1px;\n    opacity: 0;\n    overflow: hidden;\n    position: absolute;\n    z-index: -1;\n  }\n}\n\n.is-dragover {\n  .file-upload {\n    outline-offset: -10px;\n    outline-color: #c8dadf;\n    background-color: #fff;\n  }\n}\n</style>\n",".file-upload {\n  outline: 2px dashed #dee2e6;\n  outline-offset: -5px;\n  position: relative;\n  padding: 70px 20px;\n  text-align: center;\n  transition: outline-offset 0.15s ease-in-out, background-color 0.15s linear;\n}\n.file-upload label {\n  max-width: 80%;\n  text-overflow: ellipsis;\n  white-space: nowrap;\n  cursor: pointer;\n  display: inline-block;\n  overflow: hidden;\n}\n.file-upload .file-upload--icon {\n  width: 100%;\n  height: 80px;\n  fill: #dee2e6;\n  display: block;\n  margin-bottom: 40px;\n}\n.file-upload .file-upload--input {\n  width: 0.1px;\n  height: 0.1px;\n  opacity: 0;\n  overflow: hidden;\n  position: absolute;\n  z-index: -1;\n}\n\n.is-dragover .file-upload {\n  outline-offset: -10px;\n  outline-color: #c8dadf;\n  background-color: #fff;\n}\n\n/*# sourceMappingURL=CsvImport.vue.map */"]}, media: undefined });
 
 	  };
 	  /* scoped */

@@ -36,7 +36,7 @@
         <tr v-for="(field, key) in fieldsToMap" :key="key">
           <td>{{ field.label }}</td>
           <td>
-            <select class="form-control" :name="`csv_uploader_map_${key}`" v-model="map[field.key]">
+            <select class="form-control" :name="`${mapFieldsName}[${key}]`" v-model="map[field.key]">
               <option :value="null"></option>
               <option v-for="(column, key) in firstRow" :key="key" :value="key">{{ column }}</option>
             </select>
@@ -66,6 +66,10 @@
       },
       mapFields: {
         required: true
+      },
+      mapFieldsName: {
+        type: String,
+        default: 'fields'
       },
       fileMimeTypes: {
         type: Array,
