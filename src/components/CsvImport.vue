@@ -145,7 +145,7 @@
         } else {
           this.sample = null;
           this.fileName = null;
-          this.errorMessage = 'File type is invalid.';
+          this.errorMessage = 'Please upload a valid CSV file.';
         }
       },
       validateMimeType(type) {
