@@ -1,7 +1,7 @@
-import buble from '@rollup/plugin-buble';
-import commonjs from '@rollup/plugin-commonjs';
-import replace from '@rollup/plugin-replace';
-import json from '@rollup/plugin-json';
+import buble from 'rollup-plugin-buble';
+import commonjs from 'rollup-plugin-commonjs';
+import replace from 'rollup-plugin-replace';
+import json from 'rollup-plugin-json';
 import vue from 'rollup-plugin-vue';
 import resolve from 'rollup-plugin-node-resolve';
 import { eslint } from 'rollup-plugin-eslint';
@@ -18,12 +18,12 @@ export default (async () => ({
   output: {
     name: 'mailery.subscriber',
     exports: 'named',
-    sourcemap: true,
     globals: {
       'bootstrap-vue': 'BootstrapVue',
       'vue': 'Vue',
       'vuex': 'Vuex'
-    }
+    },
+    sourcemap: true
   },
   external: [
     'bootstrap-vue',
@@ -31,15 +31,15 @@ export default (async () => ({
     'vuex'
   ],
   plugins: [
+    eslint(),
+    commonjs(),
     resolve({
       browser: true,
       preferBuiltins: true
     }),
-    commonjs(),
     globals(),
     builtins(),
     json(),
-    eslint(),
     replace({
       'process.env.NODE_ENV': JSON.stringify(env)
     }),

@@ -49,10 +49,11 @@
 </template>
 
 <script>
-  import Vue from 'vue';
-  import { drop, every, forEach, get, isArray, map, set } from 'lodash';
   import Papa from 'papaparse';
   import mimeTypes from 'mime-types';
+  import get from 'lodash/get';
+  import isArray from 'lodash/isArray';
+  import map from 'lodash/map';
 
   export default {
     name: 'ui-csv-import',
